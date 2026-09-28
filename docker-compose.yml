@@ -1,0 +1,35 @@
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: order-management-mysql
+    environment:
+      MYSQL_DATABASE: order_management
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  app:
+    image: order-management:1.0
+    container_name: order-management-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      JWT_SECRET: 7f4a9c2d8e1b6f3a5c7d9e2f4a6b8c1d3e5f7a9b2c4d6e8f1a3c5e7b9d2f4
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql_data:
