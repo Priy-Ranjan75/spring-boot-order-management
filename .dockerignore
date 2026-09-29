@@ -1,4 +1,6 @@
-target/
+target/*
+!target/order-management-0.0.1-SNAPSHOT.jar
+
 .git/
 .gitignore
 .idea/
