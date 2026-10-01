@@ -18,19 +18,19 @@ jobs:
       mysql:
         image: mysql:8.4
         env:
-          MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: order_management
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -uroot -p${{ secrets.DB_PASSWORD }}"
+          --health-cmd="mysqladmin ping -h localhost -uroot -proot"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
 
     env:
       DB_USERNAME: root
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_PASSWORD: root
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
       SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 
