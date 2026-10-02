@@ -1,4 +1,4 @@
-name: Order Management CI
+name: Order Management CI/CD
 
 on:
   push:
@@ -11,7 +11,6 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     services:
@@ -35,7 +34,6 @@ jobs:
       SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 
     steps:
-
       - name: Checkout source code
         uses: actions/checkout@v5
 
@@ -71,4 +69,28 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/order-management:${{ github.sha }}
+            \({{ secrets.DOCKERHUB_USERNAME }}/order-management:\){{ github.sha }}
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest Docker image
+        run: docker pull ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
+
+      - name: Stop and remove old application container
+        run: |
+          docker stop order-management-app || true
+          docker rm order-management-app || true
+
+      - name: Run new application container
+        run: |
+          docker run -d `
+            --name order-management-app `
+            -p 8080:8080 `
+            -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3307/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata `
+            -e SPRING_DATASOURCE_USERNAME=root `
+            -e SPRING_DATASOURCE_PASSWORD=root `
+            -e JWT_SECRET=${{ secrets.JWT_SECRET }} `
+            ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
