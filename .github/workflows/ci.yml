@@ -84,11 +84,4 @@ jobs:
 
       - name: Run new application container
         run: |
-          docker run -d `
-            --name order-management-app `
-            -p 8080:8080 `
-            -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3307/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata `
-            -e SPRING_DATASOURCE_USERNAME=root `
-            -e SPRING_DATASOURCE_PASSWORD=root `
-            -e JWT_SECRET=${{ secrets.JWT_SECRET }} `
-            ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
+          docker run -d --name order-management-app -p 8080:8080 -e SPRING_DATASOURCE_URL="jdbc:mysql://host.docker.internal:3307/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata" -e SPRING_DATASOURCE_USERNAME=root -e SPRING_DATASOURCE_PASSWORD=root -e JWT_SECRET="\({{ secrets.JWT_SECRET }}"\){{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
