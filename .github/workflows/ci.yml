@@ -1,9 +1,11 @@
+```yaml
 name: Order Management CI/CD
 
 on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
@@ -70,30 +72,50 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
 
-
   deploy:
+    name: Deploy to Local Server
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: self-hosted
 
+    env:
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
     steps:
 
+      - name: Checkout source code
+        uses: actions/checkout@v5
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Pull latest Docker image
+        shell: powershell
         run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
+          docker compose pull
 
-      - name: Stop and remove old application container
+      - name: Stop existing containers
+        shell: powershell
         run: |
-          docker stop order-management-app 2>$null
-          docker rm -f order-management-app 2>$null
+          docker compose down
 
-      - name: Run new application container
+      - name: Start application
+        shell: powershell
         run: |
-          docker run -d `
-            --name order-management-app `
-            -p 8080:8080 `
-            -e SPRING_DATASOURCE_URL="jdbc:mysql://host.docker.internal:3307/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata" `
-            -e SPRING_DATASOURCE_USERNAME="root" `
-            -e SPRING_DATASOURCE_PASSWORD="${{ secrets.DB_PASSWORD }}" `
-            -e JWT_SECRET="${{ secrets.JWT_SECRET }}" `
-            ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
+          docker compose up -d
+
+      - name: Show deployment status
+        shell: powershell
+        run: |
+          docker compose ps
+
+      - name: Verify application
+        shell: powershell
+        run: |
+          Start-Sleep -Seconds 20
+          docker compose ps
+```
