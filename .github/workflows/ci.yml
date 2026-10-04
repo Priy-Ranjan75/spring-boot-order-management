@@ -1,4 +1,3 @@
-```yaml
 name: Order Management CI/CD
 
 on:
@@ -11,7 +10,6 @@ on:
       - main
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
 
@@ -36,7 +34,6 @@ jobs:
       SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 
     steps:
-
       - name: Checkout source code
         uses: actions/checkout@v5
 
@@ -46,6 +43,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
+
+      - name: Wait for MySQL
+        run: |
+          echo "Waiting for MySQL to be healthy..."
+          until mysqladmin ping -h"localhost" -u"root" -p"root" --silent; do
+            sleep 3
+          done
 
       - name: Build application
         run: mvn clean package -DskipTests
@@ -83,7 +87,6 @@ jobs:
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
     steps:
-
       - name: Checkout source code
         uses: actions/checkout@v5
 
@@ -95,27 +98,22 @@ jobs:
 
       - name: Pull latest Docker image
         shell: powershell
-        run: |
-          docker compose pull
+        run: docker compose pull
 
       - name: Stop existing containers
         shell: powershell
-        run: |
-          docker compose down
+        run: docker compose down
 
       - name: Start application
         shell: powershell
-        run: |
-          docker compose up -d
+        run: docker compose up -d
 
       - name: Show deployment status
         shell: powershell
-        run: |
-          docker compose ps
+        run: docker compose ps
 
       - name: Verify application
         shell: powershell
         run: |
           Start-Sleep -Seconds 20
           docker compose ps
-```
