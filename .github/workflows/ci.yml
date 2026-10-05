@@ -10,6 +10,10 @@ on:
       - main
 
 jobs:
+
+  # =========================
+  # CI - Build, Test & Docker
+  # =========================
   build:
     runs-on: ubuntu-latest
 
@@ -34,6 +38,7 @@ jobs:
       SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 
     steps:
+
       - name: Checkout source code
         uses: actions/checkout@v5
 
@@ -46,16 +51,27 @@ jobs:
 
       - name: Wait for MySQL
         run: |
-          echo "Waiting for MySQL to be healthy..."
-          until mysqladmin ping -h"localhost" -u"root" -p"root" --silent; do
+          echo "Waiting for MySQL to be ready..."
+          until mysqladmin ping -h localhost -u root -proot --silent; do
             sleep 3
           done
+          echo "MySQL is ready."
 
       - name: Build application
         run: mvn clean package -DskipTests
+        env:
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 
       - name: Run tests
         run: mvn test
+        env:
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 
       - name: Set up Docker Buildx
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -76,10 +92,17 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
 
+
+  # =========================
+  # CD - Deploy to Local Server
+  # =========================
   deploy:
     name: Deploy to Local Server
+
     needs: build
+
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
     runs-on: self-hosted
 
     env:
@@ -87,6 +110,7 @@ jobs:
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
     steps:
+
       - name: Checkout source code
         uses: actions/checkout@v5
 
@@ -98,22 +122,32 @@ jobs:
 
       - name: Pull latest Docker image
         shell: powershell
-        run: docker compose pull
+        run: |
+          docker compose pull
 
       - name: Stop existing containers
         shell: powershell
-        run: docker compose down
+        run: |
+          docker compose down
 
       - name: Start application
         shell: powershell
-        run: docker compose up -d
+        run: |
+          docker compose up -d
 
       - name: Show deployment status
         shell: powershell
-        run: docker compose ps
+        run: |
+          docker compose ps
 
       - name: Verify application
         shell: powershell
         run: |
           Start-Sleep -Seconds 20
           docker compose ps
+
+      - name: Show application logs if deployment fails
+        if: failure()
+        shell: powershell
+        run: |
+          docker compose logs --tail=100
