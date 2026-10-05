@@ -14,7 +14,8 @@ import com.example.order_management.service.AuthenticationService;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-
+	// CI/CD end-to-end deployment verification
+	
 	private final AuthenticationService authenticationService;
 
 	public AuthController(AuthenticationService authenticationService) {
