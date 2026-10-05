@@ -11,26 +11,28 @@ on:
 
 jobs:
 
-  # =========================
-  # CI - Build, Test & Docker
-  # =========================
+  # ============================================================
+  # CI - BUILD, TEST AND PUSH DOCKER IMAGE
+  # ============================================================
   build:
     runs-on: ubuntu-latest
 
     services:
       mysql:
         image: mysql:8.4
+
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: order_management
+
         ports:
           - 3306:3306
+
         options: >-
           --health-cmd="mysqladmin ping -h localhost -uroot -proot"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
-
     env:
       DB_USERNAME: root
       DB_PASSWORD: root
@@ -39,9 +41,15 @@ jobs:
 
     steps:
 
+      # ========================================================
+      # 1. Checkout source code
+      # ========================================================
       - name: Checkout source code
         uses: actions/checkout@v5
 
+      # ========================================================
+      # 2. Setup Java 17
+      # ========================================================
       - name: Set up Java 17
         uses: actions/setup-java@v5
         with:
@@ -49,14 +57,9 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Wait for MySQL
-        run: |
-          echo "Waiting for MySQL to be ready..."
-          until mysqladmin ping -h localhost -u root -proot --silent; do
-            sleep 3
-          done
-          echo "MySQL is ready."
-
+      # ========================================================
+      # 3. Build Spring Boot application
+      # ========================================================
       - name: Build application
         run: mvn clean package -DskipTests
         env:
@@ -65,6 +68,9 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 
+      # ========================================================
+      # 4. Run tests
+      # ========================================================
       - name: Run tests
         run: mvn test
         env:
@@ -73,10 +79,16 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/order_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 
+      # ========================================================
+      # 5. Setup Docker Buildx
+      # ========================================================
       - name: Set up Docker Buildx
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/setup-buildx-action@v3
 
+      # ========================================================
+      # 6. Login to Docker Hub
+      # ========================================================
       - name: Login to Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
@@ -84,6 +96,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # ========================================================
+      # 7. Build and Push Docker Image
+      # ========================================================
       - name: Build and push Docker image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v6
@@ -93,9 +108,9 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest
 
 
-  # =========================
-  # CD - Local Windows Server
-  # =========================
+  # ============================================================
+  # CD - DEPLOY TO LOCAL WINDOWS SERVER
+  # ============================================================
   deploy:
     name: Deploy to Local Server
 
@@ -111,43 +126,109 @@ jobs:
 
     steps:
 
+      # ========================================================
+      # 1. Checkout source code
+      # ========================================================
       - name: Checkout source code
         uses: actions/checkout@v5
 
+      # ========================================================
+      # 2. Login to Docker Hub
+      # ========================================================
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Pull latest Docker image
-        shell: cmd
+      # ========================================================
+      # 3. Pull the application image directly
+      # ========================================================
+      - name: Pull latest application image
+        shell: powershell
         run: |
-          docker compose pull
-
-      - name: Stop existing containers
-        shell: cmd
+          docker pull "${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest"
+      # ========================================================
+      # 4. Verify application image
+      # ========================================================
+      - name: Verify application image
+        shell: powershell
         run: |
-          docker compose down
-
-      - name: Start application
-        shell: cmd
+          docker image inspect "${{ secrets.DOCKERHUB_USERNAME }}/order-management:latest"
+      # ========================================================
+      # 5. Show existing Docker containers
+      # ========================================================
+      - name: Show existing containers
+        shell: powershell
         run: |
-          docker compose up -d
-
+          docker ps -a
+      # ========================================================
+      # 6. Start / update Compose application
+      #
+      # Do NOT use "docker compose down".
+      #
+      # This keeps the MySQL container and database available.
+      # The mysql_data volume is preserved.
+      # ========================================================
+      - name: Start application with Docker Compose
+        shell: powershell
+        run: |
+          docker compose up -d --no-build
+      # ========================================================
+      # 7. Show container status
+      # ========================================================
       - name: Show deployment status
-        shell: cmd
+        shell: powershell
         run: |
           docker compose ps
-
-      - name: Verify application
-        shell: cmd
+      # ========================================================
+      # 8. Wait for application to start
+      # ========================================================
+      - name: Wait for application startup
+        shell: powershell
         run: |
-          timeout /t 20 /nobreak
+          $maxAttempts = 30
+          $attempt = 0
+          while ($attempt -lt $maxAttempts) {
+              $attempt++
+              Write-Host "Checking application startup... attempt $attempt/$maxAttempts"
+              try {
+                  $response = Invoke-WebRequest `
+                      -Uri "http://localhost:8080/v3/api-docs" `
+                      -UseBasicParsing `
+                      -TimeoutSec 5
+                  if ($response.StatusCode -eq 200) {
+                      Write-Host "Application is running successfully."
+                      exit 0
+                  }
+              }
+              catch {
+                  Write-Host "Application is not ready yet."
+              }
+              Start-Sleep -Seconds 2
+          }
+          Write-Error "Application did not become ready within 60 seconds."
+          exit 1
+      # ========================================================
+      # 9. Final deployment verification
+      # ========================================================
+      - name: Verify deployment
+        shell: powershell
+        run: |
           docker compose ps
-
-      - name: Show logs if deployment fails
+      # ========================================================
+      # 10. Show logs if any deployment step fails
+      # ========================================================
+      - name: Show application logs if deployment fails
         if: failure()
-        shell: cmd
+        shell: powershell
         run: |
-          docker compose logs --tail=100
+          Write-Host "=============================="
+          Write-Host "DOCKER COMPOSE STATUS"
+          Write-Host "=============================="
+          docker compose ps
+          Write-Host ""
+          Write-Host "=============================="
+          Write-Host "DOCKER COMPOSE LOGS"
+          Write-Host "=============================="
+          docker compose logs --tail=150
